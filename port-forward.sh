@@ -1,36 +1,37 @@
-#!/bin/bash
+# start-foundry.ps1
 
 # Start Cloudflare tunnel and capture URL
-URL=$(cloudflared tunnel --url http://localhost:30000 2>&1 | grep -o "https://[a-z0-9]*\.trycloudflare.com" | head -n 1)
+$tunnelOutput = & cloudflared tunnel --url http://localhost:30000 2>&1
+$url = ($tunnelOutput | Select-String -Pattern "https://[a-z0-9]*\.trycloudflare.com").Matches.Value
 
-if [ -z "$URL" ]; then
-  echo "Could not capture URL - is Foundry running?"
-  exit 1
-fi
+if (-not $url) {
+    Write-Host "Could not capture URL - is Foundry running?"
+    exit 1
+}
 
-CACHEBUSTER=$(date +%s)
-FINAL_URL="${URL}?v=${CACHEBUSTER}"
+$cachebuster = Get-Date -UFormat %s
+$finalUrl = "$url?v=$cachebuster"
 
-echo "New tunnel URL: $FINAL_URL"
+Write-Host "New tunnel URL: $finalUrl"
 
-# Write index.html with JavaScript redirect
-cat > index.html <<EOF
+# Write index.html
+@"
 <!DOCTYPE html>
 <html>
   <head>
     <script>
-      window.location.replace("$FINAL_URL");
+      window.location.replace("$finalUrl");
     </script>
   </head>
   <body>
-    <p>Redirecting to Foundry VTT at <a href="$FINAL_URL">$FINAL_URL</a>…</p>
+    <p>Redirecting to Foundry VTT at <a href="$finalUrl">$finalUrl</a>…</p>
   </body>
 </html>
-EOF
+"@ | Set-Content -Path index.html -Encoding UTF8
 
-# Commit and push to GitHub
+# Commit and push
 git add index.html
-git commit -m "Update redirect to $FINAL_URL"
+git commit -m "Update redirect to $finalUrl"
 git push
 
-echo "Redirect updated!"
+Write-Host "Redirect updated!
